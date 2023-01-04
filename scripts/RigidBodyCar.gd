@@ -145,24 +145,36 @@ func _process(delta: float) -> void:
 	rear_brake_force = max_brake_force * rear_brake_input * (1 - front_brake_bias) * 0.5 # Per wheel
 	
 	if automatic:
+		var reversing = false
+		
 		var shift_time = 700
 		var next_gear_rpm = 0
+		
 		if selected_gear + 1 < gear_ratios.size():
 			next_gear_rpm = gear_ratios[selected_gear + 1] * final_drive
 		
+		if selected_gear == -1:
+			reversing = true
+		
 		# if torque is bigger in next gear change gear up
-		if engineTorque(next_gear_rpm) > engine_net_torque:
-			if rpm > 0.8 * max_engine_rpm:
+#		if engineTorque(next_gear_rpm) > engine_net_torque:
+		# if rpm is bigger in next gear change gear up
+		if rpm > 0.85 * max_engine_rpm:
+			if selected_gear >= 0:
 				if Time.get_ticks_msec() - last_shift_time > shift_time:
 					shiftUp()
-					last_shift_time = Time.get_ticks_msec()
-
-		else:
-			if selected_gear != 0 and rpm < 0.35 * max_engine_rpm:
+		
+		elif selected_gear > 1 and rpm < 0.3 * max_engine_rpm:
+			if Time.get_ticks_msec() - last_shift_time > shift_time:
+				shiftDown()
+				
+		elif abs(selected_gear) <= 1 and abs(z_vel) < 0.5 and brake_input > 0.2:
+			if not reversing:
 				if Time.get_ticks_msec() - last_shift_time > shift_time:
 					shiftDown()
-					last_shift_time = Time.get_ticks_msec()
-
+			else:
+				if Time.get_ticks_msec() - last_shift_time > shift_time:
+					shiftUp()
 
 func _physics_process(delta):
 	local_vel = global_transform.basis.xform_inv((global_transform.origin - prev_pos) / delta)
@@ -481,7 +493,6 @@ func awd(drive, delta):
 func dragForce():
 	var spd = sqrt(x_vel * x_vel + z_vel * z_vel)
 	var cdrag = 0.5 * cd * frontal_area * air_density
-
 	
 	# fdrag.y is positive in this case because forward is -z in godot 
 	var fdrag: Vector2 = Vector2.ZERO
@@ -503,11 +514,13 @@ func burnFuel(delta):
 func shiftUp():
 	if selected_gear < gear_ratios.size():
 		selected_gear += 1
+		last_shift_time = Time.get_ticks_msec()
 
 
 func shiftDown():
 	if selected_gear > -1:
 		selected_gear -= 1
+		last_shift_time = Time.get_ticks_msec()
 
 
 func engineSound():
